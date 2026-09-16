@@ -92,19 +92,30 @@ observed execution events.
 
 ## Configuration
 
-Use `/compact-ui-config` for numeric display settings. Configuration is stored at
-`~/.pi/agent/compact-ui.json`:
+Use `/compact-ui-config` in Pi to open the interactive settings menu. You can switch header styles and adjust display thresholds with arrow keys and Enter.
+
+Configuration is persisted at `~/.pi/agent/compact-ui.json`:
 
 | Setting | Default | Purpose |
 |---|---:|---|
-| `collapsedMaxLines` | `3` | Maximum lines in a collapsed group |
+| `headerStyle` | `"compact"` | Header style: `"compact"` (`tools done · N tools`) or `"natural"` (Codex-style: `Loaded a tool, read files, ran commands`) |
+| `collapsedMaxLines` | `3` | Maximum lines shown when a tool group is collapsed |
 | `expandedToolLines` | `5` | Result-preview lines per expanded tool |
 | `expandedThinkingLines` | `10` | Thinking-preview lines when expanded |
-| `standaloneTools` | `["compress"]` | Tools excluded from ordinary grouping |
-| `headerStyle` | `"compact"` | Header style: `"compact"` (`tools done · N tools`) or `"natural"` (Codex-style: `Loaded a tool, read files, ran commands`) |
-| `toolActions` | `{}` | Custom verb mapping for natural header style, e.g. `{"todo": {"past": "updated tasks", "present": "updating tasks"}}` |
+| `standaloneTools` | `["compress"]` | Tools excluded from ordinary grouping (render with their own native UI) |
+| `toolActions` | `{}` | Custom verb phrase mappings for the `"natural"` header style |
 
-Default configuration:
+### Interactive Configuration (`/compact-ui-config`)
+
+Run `/compact-ui-config` directly inside Pi:
+
+- **Header style**: Press `Enter` on Header style to open the picker, use `▲`/`▼` (or `j`/`k`) to switch between:
+  - `compact`: e.g. `✓ tools done · 3 tools · 1.2s`
+  - `natural`: e.g. `✓ Read a file, ran commands · 1.2s`
+- **Line limits**: Press `Enter` to open a slider stepper, adjust with `◀`/`▶` (or `−`/`+`), then press `Enter` to save.
+- Settings are saved automatically to `~/.pi/agent/compact-ui.json` and take effect immediately.
+
+### Default Configuration File
 
 ```json
 {
@@ -117,9 +128,9 @@ Default configuration:
 }
 ```
 
-### Custom Tool Actions (Natural Style)
+### Custom Tool Actions (`toolActions`)
 
-When using `"headerStyle": "natural"`, you can define custom past and present tense phrases for any tool or custom extension:
+When using `"headerStyle": "natural"`, you can define custom past and present tense phrases for any tool or custom extension (such as MCP tools or custom skills):
 
 ```json
 {
@@ -137,6 +148,10 @@ When using `"headerStyle": "natural"`, you can define custom past and present te
   }
 }
 ```
+
+- **Two-form mapping**: `{ "past": "...", "present": "..." }` lets pi-compact-ui show active phrasing (e.g. `◐ Sending file to WeChat`) while running, and completed phrasing (e.g. `▲ Sent file to WeChat`) when done.
+- **String shorthand**: `"fetch_github": "synced repository"` uses the same phrase for both states.
+- **Fallback behavior**: Unmapped tools display `Running <tool>` / `Ran <tool>`, or fall back to standard grouping.
 
 Edit `standaloneTools` in the JSON file and run `/reload` to apply the change.
 Preserve other settings when updating this field.
