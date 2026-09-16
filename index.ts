@@ -156,6 +156,7 @@ function makeStepper(
 	let cachedWidth: number | undefined;
 	let cachedLines: string[] | undefined;
 	const fg = (color: string, t: string) => theme?.fg?.(color, t) ?? t;
+	const isZh = config.language === "zh";
 
 	return {
 		render(width: number): string[] {
@@ -165,13 +166,16 @@ function makeStepper(
 			const filled = Math.round(ratio * barLen);
 			const bar = "█".repeat(filled) + "░".repeat(Math.max(0, barLen - filled));
 			const titleText = theme?.bold ? theme.bold(title) : title;
+			const hint = isZh
+				? "  ◀ ▶ / − + 调节数值    Enter 保存    Esc 取消"
+				: "  ◀ ▶ / − +  adjust    Enter  save    Esc  cancel";
 			cachedLines = [
 				fg("accent", titleText),
 				"",
 				`  ${fg("accent", String(value))}`,
 				`  ${fg("muted", bar)}`,
 				"",
-				fg("dim", "  ◀ ▶ / − +  adjust    Enter  save    Esc  cancel"),
+				fg("dim", hint),
 			].map((line) => truncateToWidth(line, Math.max(1, width)));
 			cachedWidth = width;
 			return cachedLines;
@@ -227,8 +231,11 @@ function makeChoicePicker(
 				lines.push(`  ${label}${desc}`);
 			}
 
+			const hint = isZh
+				? "  ▲ ▼ / j k 移动光标    Enter / Space 选择    Esc 取消"
+				: "  ▲ ▼ / j k  navigate    Enter / Space  select    Esc  cancel";
 			lines.push("");
-			lines.push(fg("dim", "  ▲ ▼ / j k  navigate    Enter / Space  select    Esc  cancel"));
+			lines.push(fg("dim", hint));
 
 			cachedLines = lines.map((line) => truncateToWidth(line, Math.max(1, width)));
 			cachedWidth = width;
@@ -2989,20 +2996,21 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 
+			const isZh = (config.language ?? "en") === "zh";
 			const changed = await ctx.ui.custom<boolean>((tui, theme, _keybindings, done) => {
 				let anyChanged = false;
 				const items: SettingItem[] = [
 					{
 						id: "language",
-						label: "Language / 语言",
+						label: isZh ? "语言 (Language)" : "Language / 语言",
 						currentValue: config.language ?? "en",
-						description: "UI summary language (en: English, zh: 简体中文)",
+						description: isZh ? "界面与操作汇总提示语言 (en: 英文, zh: 简体中文)" : "UI summary language (en: English, zh: 简体中文)",
 						submenu: (currentValue: string, subDone: (value?: string) => void) =>
 							makeChoicePicker(
-								"Language / 语言",
+								isZh ? "语言设置" : "Language / 语言",
 								currentValue,
 								[
-									{ value: "en", label: "English", description: "English UI summaries" },
+									{ value: "en", label: "English", description: isZh ? "英文界面汇总" : "English UI summaries" },
 									{ value: "zh", label: "简体中文", description: "中文界面提示与操作摘要" },
 								],
 								theme,
@@ -3011,29 +3019,52 @@ export default function (pi: ExtensionAPI) {
 					},
 					{
 						id: "headerStyle",
-						label: "Header style",
+						label: isZh ? "头部样式 (Header style)" : "Header style",
 						currentValue: config.headerStyle ?? "compact",
-						description: "Header summary style (compact: tools done, natural: Codex-like summary)",
+						description: isZh
+							? "工具组顶部汇总样式 (compact: 紧凑统计, natural: 类似 Codex 自然语言)"
+							: "Header summary style (compact: tools done, natural: Codex-like summary)",
 						submenu: (currentValue: string, subDone: (value?: string) => void) =>
 							makeChoicePicker(
-								"Header style",
+								isZh ? "头部样式" : "Header style",
 								currentValue,
 								[
-									{ value: "compact", label: "compact", description: "Compact (e.g. tools done · 3 tools · 1.2s)" },
-									{ value: "natural", label: "natural", description: "Codex natural language (e.g. Read a file, ran commands)" },
+									{
+										value: "compact",
+										label: "compact",
+										description: isZh ? "紧凑统计 (如: 工具调用完成 · 3 个工具 · 1.2s)" : "Compact (e.g. tools done · 3 tools · 1.2s)",
+									},
+									{
+										value: "natural",
+										label: "natural",
+										description: isZh ? "自然语言概括 (如: 读取了文件，执行了命令)" : "Codex natural language (e.g. Read a file, ran commands)",
+									},
 								],
 								theme,
 								subDone,
 							),
 					},
-					...CONFIG_KEYS.map((meta) => ({
-						id: meta.id,
-						label: meta.label,
-						currentValue: String((config as any)[meta.id]),
-						description: meta.description,
-						submenu: (currentValue: string, subDone: (value?: string) => void) =>
-							makeStepper(meta.label, Number(currentValue), meta, theme, subDone),
-					})),
+					...CONFIG_KEYS.map((meta) => {
+						const labelsZh: Record<string, { label: string; desc: string }> = {
+							collapsedMaxLines: { label: "折叠最大行数", desc: "工具组收起时最多显示的行数" },
+							expandedToolLines: { label: "展开工具输出行数", desc: "单个工具展开时显示的结果预览行数" },
+							expandedThinkingLines: { label: "展开思考输出行数", desc: "展开时显示的思考内容行数" },
+						};
+						return {
+							id: meta.id,
+							label: isZh ? (labelsZh[meta.id]?.label ?? meta.label) : meta.label,
+							currentValue: String((config as any)[meta.id]),
+							description: isZh ? (labelsZh[meta.id]?.desc ?? meta.description) : meta.description,
+							submenu: (currentValue: string, subDone: (value?: string) => void) =>
+								makeStepper(
+									isZh ? (labelsZh[meta.id]?.label ?? meta.label) : meta.label,
+									Number(currentValue),
+									meta,
+									theme,
+									subDone,
+								),
+						};
+					}),
 				];
 				const settingsList = new SettingsList(
 					items,
