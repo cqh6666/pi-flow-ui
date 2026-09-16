@@ -697,14 +697,14 @@ export function formatActionsSummary(tools: { name?: string; args?: unknown }[],
 	return phrases.join(", ");
 }
 
-function groupHeader(tools: GroupTool[], thinking: boolean, frame: string, fg: (color: string, text: string) => string): string {
+function groupHeader(tools: GroupTool[], thinking: boolean, frame: string, fg: (color: string, text: string) => string, isWorking?: boolean): string {
 	const pending = tools.some((tool) => tool.status === "pending");
 	const failed = tools.filter((tool) => tool.status === "error").length;
-	const working = pending || thinking;
+	const working = isWorking !== undefined ? (isWorking || pending || thinking) : (pending || thinking);
 	const color = failed ? "error" : working ? "accent" : "success";
 	
 	if (config.headerStyle === "compact") {
-		const label = pending ? "tool calling..." : thinking ? "thinking..." : "tools done";
+		const label = working ? "tool calling..." : "tools done";
 		let detail = tools.length ? ` · ${tools.length} ${tools.length === 1 ? "tool" : "tools"}` : "";
 		if (failed) detail += ` · ${failed} failed`;
 		if (tools.length && !working) {
@@ -717,7 +717,7 @@ function groupHeader(tools: GroupTool[], thinking: boolean, frame: string, fg: (
 
 	const label = thinking && !tools.length
 		? "thinking..."
-		: formatActionsSummary(tools, pending);
+		: formatActionsSummary(tools, working);
 	let detail = "";
 	if (failed) detail += ` · ${failed} failed`;
 	if (tools.length && !working) {
@@ -1003,7 +1003,8 @@ export class CompactExternalGroupComponent implements Component {
 	private renderCollapsed(width: number, frame: string): string[] {
 		const fg = (color: string, text: string) => this.theme?.fg?.(color, text) ?? text;
 		const bold = (text: string) => this.theme?.bold?.(text) ?? text;
-		const lines = [groupHeader(this.state.tools, !this.state.sealed && (this.state.thinkingActive || this.state.tools.length === 0), frame, fg)];
+		const isWorking = (this.state.thinkingActive && !this.state.sealed) || this.state.tools.some((t) => t.status === "pending");
+		const lines = [groupHeader(this.state.tools, !this.state.sealed && (this.state.thinkingActive || this.state.tools.length === 0), frame, fg, isWorking)];
 		const thinking = this.state.thinking.trim().replace(/[*_#`>]+/g, "");
 		const aggregated = aggregateConsecutiveTools(this.state.tools, (tool) => tool.name, (tool) => tool.status, (tool) => tool.args);
 		const selection = selectCollapsedItems(aggregated, (tool) => tool.status, config.collapsedMaxLines, thinking.length > 0);
@@ -1022,7 +1023,8 @@ export class CompactExternalGroupComponent implements Component {
 
 	private renderExpanded(width: number, frame: string): string[] {
 		const fg = (color: string, text: string) => this.theme?.fg?.(color, text) ?? text;
-		const lines = [groupHeader(this.state.tools, !this.state.sealed && (this.state.thinkingActive || this.state.tools.length === 0), frame, fg)];
+		const isWorking = (this.state.thinkingActive && !this.state.sealed) || this.state.tools.some((t) => t.status === "pending");
+		const lines = [groupHeader(this.state.tools, !this.state.sealed && (this.state.thinkingActive || this.state.tools.length === 0), frame, fg, isWorking)];
 		for (let index = 0; index < this.state.tools.length; index++) {
 			const tool = this.state.tools[index]!;
 			const last = index === this.state.tools.length - 1;
@@ -1884,7 +1886,8 @@ class ToolGroupComponent extends Container {
 				endedAt: toolEnds.get(tool.toolCallId ?? "")
 			};
 		});
-		return groupHeader(tools, this.liveThinkingActive() || (!this.sealed && tools.length === 0), frame, fg);
+		const isWorking = (this === lastActiveGroup && !this.sealed && (thinkingActive || this.liveThinking().trim().length > 0)) || this.hasPending();
+		return groupHeader(tools, this.liveThinkingActive() || (!this.sealed && tools.length === 0), frame, fg, isWorking);
 	}
 
 	// Folded: header + up to collapsedMaxLines total, ellipsis when exceeding.
