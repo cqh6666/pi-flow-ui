@@ -81,21 +81,28 @@ const DEFAULT_CONFIG: CompactUiConfig = {
 	headerStyle: "compact",
 	toolActions: {},
 };
-let config: CompactUiConfig = { ...DEFAULT_CONFIG };
-try {
-	const loaded = JSON.parse(readFileSync(CONFIG_PATH, "utf-8"));
-	config = {
-		...DEFAULT_CONFIG,
-		...loaded,
-		standaloneTools: Array.isArray(loaded.standaloneTools)
-			? loaded.standaloneTools
-			: DEFAULT_CONFIG.standaloneTools,
-		toolActions: typeof loaded.toolActions === "object" && loaded.toolActions !== null
-			? loaded.toolActions
-			: DEFAULT_CONFIG.toolActions,
-	};
-} catch {
-	// first run — use defaults
+function loadConfig(): CompactUiConfig {
+	try {
+		const loaded = JSON.parse(readFileSync(CONFIG_PATH, "utf-8"));
+		return {
+			...DEFAULT_CONFIG,
+			...loaded,
+			standaloneTools: Array.isArray(loaded.standaloneTools)
+				? loaded.standaloneTools
+				: DEFAULT_CONFIG.standaloneTools,
+			toolActions: typeof loaded.toolActions === "object" && loaded.toolActions !== null
+				? loaded.toolActions
+				: DEFAULT_CONFIG.toolActions,
+		};
+	} catch {
+		return { ...DEFAULT_CONFIG };
+	}
+}
+
+let config: CompactUiConfig = loadConfig();
+
+function reloadConfig(): void {
+	config = loadConfig();
 }
 
 function saveConfig(): void {
@@ -174,6 +181,64 @@ function makeStepper(
 				value = Math.min(meta.max, value + meta.step);
 			} else if (matchesKey(data, Key.enter) || matchesKey(data, Key.space)) {
 				done(String(value));
+				return;
+			} else if (matchesKey(data, Key.escape)) {
+				done(undefined);
+				return;
+			}
+			cachedWidth = undefined;
+		},
+		invalidate(): void {
+			cachedWidth = undefined;
+		},
+	};
+}
+
+// Option picker submenu for categorical choices (e.g. headerStyle).
+function makeChoicePicker(
+	title: string,
+	initial: string,
+	choices: { value: string; label: string; description?: string }[],
+	theme: any,
+	done: (value?: string) => void,
+): Component {
+	let selectedIndex = Math.max(0, choices.findIndex((c) => c.value === initial));
+	let cachedWidth: number | undefined;
+	let cachedLines: string[] | undefined;
+	const fg = (color: string, t: string) => theme?.fg?.(color, t) ?? t;
+
+	return {
+		render(width: number): string[] {
+			if (cachedLines && cachedWidth === width) return cachedLines;
+			const titleText = theme?.bold ? theme.bold(title) : title;
+			const lines = [
+				fg("accent", titleText),
+				"",
+			];
+
+			for (let i = 0; i < choices.length; i++) {
+				const choice = choices[i]!;
+				const isSelected = i === selectedIndex;
+				const radio = isSelected ? "●" : "○";
+				const label = isSelected ? fg("accent", `${radio} ${choice.label}`) : fg("muted", `${radio} ${choice.label}`);
+				const desc = choice.description ? fg("dim", ` - ${choice.description}`) : "";
+				lines.push(`  ${label}${desc}`);
+			}
+
+			lines.push("");
+			lines.push(fg("dim", "  ▲ ▼ / j k  navigate    Enter / Space  select    Esc  cancel"));
+
+			cachedLines = lines.map((line) => truncateToWidth(line, Math.max(1, width)));
+			cachedWidth = width;
+			return cachedLines;
+		},
+		handleInput(data: string): void {
+			if (matchesKey(data, Key.up) || data === "k") {
+				selectedIndex = (selectedIndex - 1 + choices.length) % choices.length;
+			} else if (matchesKey(data, Key.down) || data === "j") {
+				selectedIndex = (selectedIndex + 1) % choices.length;
+			} else if (matchesKey(data, Key.enter) || matchesKey(data, Key.space)) {
+				done(choices[selectedIndex]?.value);
 				return;
 			} else if (matchesKey(data, Key.escape)) {
 				done(undefined);
@@ -2674,6 +2739,7 @@ export default function (pi: ExtensionAPI) {
 	}
 
 	pi.on("session_start", async (_event, ctx) => {
+		reloadConfig();
 		currentTheme = ctx.ui.theme;
 		getToolsExpanded = ctx.ui.getToolsExpanded?.bind(ctx.ui);
 		ctx.ui.setHiddenThinkingLabel("");
@@ -2691,6 +2757,14 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("tool_execution_start", async (event) => {
+		// Prune old entries if tool timing maps grow excessively large (e.g. over 1000 items)
+		if (toolStarts.size > 1000) {
+			const keysToDelete = Array.from(toolStarts.keys()).slice(0, 500);
+			for (const k of keysToDelete) {
+				toolStarts.delete(k);
+				toolEnds.delete(k);
+			}
+		}
 		toolStarts.set(event.toolCallId, Date.now());
 		lastActiveGroup?.invalidate();
 	});
@@ -2813,10 +2887,11 @@ export default function (pi: ExtensionAPI) {
 	pi.registerCommand("compact-ui-config", {
 		description: "Interactive compact-ui settings (arrows to select, Enter to adjust, Esc to close)",
 		handler: async (_args, ctx) => {
+			reloadConfig();
 			// Non-TUI modes (print/json) can't show the interactive menu.
 			if (!ctx.hasUI) {
 				ctx.ui.notify(
-					`compact: collapsedMaxLines=${config.collapsedMaxLines}, expandedToolLines=${config.expandedToolLines}, expandedThinkingLines=${config.expandedThinkingLines}`,
+					`compact: headerStyle=${config.headerStyle}, collapsedMaxLines=${config.collapsedMaxLines}, expandedToolLines=${config.expandedToolLines}, expandedThinkingLines=${config.expandedThinkingLines}`,
 					"info",
 				);
 				return;
@@ -2824,27 +2899,50 @@ export default function (pi: ExtensionAPI) {
 
 			const changed = await ctx.ui.custom<boolean>((tui, theme, _keybindings, done) => {
 				let anyChanged = false;
-				const items: SettingItem[] = CONFIG_KEYS.map((meta) => ({
-					id: meta.id,
-					label: meta.label,
-					currentValue: String((config as any)[meta.id]),
-					description: meta.description,
-					submenu: (currentValue: string, subDone: (value?: string) => void) =>
-						makeStepper(meta.label, Number(currentValue), meta, theme, subDone),
-				}));
-			const settingsList = new SettingsList(
-				items,
-				Math.min(items.length, 15),
-				getSettingsListTheme(),
-				(id, newValue) => {
-					// Persist and refresh the live groups when SettingsList commits a change.
-					(config as any)[id] = Number(newValue);
-					saveConfig();
-					anyChanged = true;
-					for (const g of groups) g.invalidate();
-				},
-				() => done(anyChanged),
-			);
+				const items: SettingItem[] = [
+					{
+						id: "headerStyle",
+						label: "Header style",
+						currentValue: config.headerStyle ?? "compact",
+						description: "Header summary style (compact: tools done, natural: Codex-like summary)",
+						submenu: (currentValue: string, subDone: (value?: string) => void) =>
+							makeChoicePicker(
+								"Header style",
+								currentValue,
+								[
+									{ value: "compact", label: "compact", description: "Compact (e.g. tools done · 3 tools · 1.2s)" },
+									{ value: "natural", label: "natural", description: "Codex natural language (e.g. Read a file, ran commands)" },
+								],
+								theme,
+								subDone,
+							),
+					},
+					...CONFIG_KEYS.map((meta) => ({
+						id: meta.id,
+						label: meta.label,
+						currentValue: String((config as any)[meta.id]),
+						description: meta.description,
+						submenu: (currentValue: string, subDone: (value?: string) => void) =>
+							makeStepper(meta.label, Number(currentValue), meta, theme, subDone),
+					})),
+				];
+				const settingsList = new SettingsList(
+					items,
+					Math.min(items.length, 15),
+					getSettingsListTheme(),
+					(id, newValue) => {
+						// Persist and refresh the live groups when SettingsList commits a change.
+						if (id === "headerStyle") {
+							config.headerStyle = newValue as "natural" | "compact";
+						} else {
+							(config as any)[id] = Number(newValue);
+						}
+						saveConfig();
+						anyChanged = true;
+						for (const g of groups) g.invalidate();
+					},
+					() => done(anyChanged),
+				);
 			return {
 				render(width: number) {
 					return settingsList.render(width);
