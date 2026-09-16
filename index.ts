@@ -599,8 +599,8 @@ export function isImagePath(path: unknown): boolean {
 	return /\.(png|jpe?g|gif|webp|bmp|ico|tiff?|svg)$/i.test(path);
 }
 
-export function formatActionsSummary(tools: { name?: string; args?: unknown }[]): string {
-	if (!tools.length) return "tools done";
+export function formatActionsSummary(tools: { name?: string; args?: unknown }[], isPending = false): string {
+	if (!tools.length) return isPending ? "tool calling..." : "tools done";
 	const counts = {
 		skills: new Set<string>(),
 		images: 0,
@@ -646,36 +646,52 @@ export function formatActionsSummary(tools: { name?: string; args?: unknown }[])
 	const phrases: string[] = [];
 
 	if (counts.loadTool > 0) {
-		phrases.push(counts.loadTool === 1 ? "Loaded a tool" : "Loaded tools");
+		if (isPending) {
+			phrases.push(counts.loadTool === 1 ? "loading a tool" : "loading tools");
+		} else {
+			phrases.push(counts.loadTool === 1 ? "loaded a tool" : "loaded tools");
+		}
 	}
 	if (counts.skills.size > 0) {
 		const skillNames = Array.from(counts.skills);
+		const verb = isPending ? "reading" : "read";
 		if (skillNames.length === 1) {
-			phrases.push(`Read ${skillNames[0]} skill`);
+			phrases.push(`${verb} ${skillNames[0]} skill`);
 		} else {
-			phrases.push(`Read ${skillNames.length} skills`);
+			phrases.push(`${verb} ${skillNames.length} skills`);
 		}
 	}
 	if (counts.images > 0) {
-		phrases.push(counts.images === 1 ? "viewed an image" : `viewed ${counts.images} images`);
+		const verb = isPending ? "viewing" : "viewed";
+		phrases.push(counts.images === 1 ? `${verb} an image` : `${verb} ${counts.images} images`);
 	}
 	if (counts.read > 0) {
-		phrases.push(counts.read === 1 ? "read a file" : "read files");
+		const verb = isPending ? "reading" : "read";
+		phrases.push(counts.read === 1 ? `${verb} a file` : `${verb} files`);
 	}
 	if (counts.edit > 0) {
-		phrases.push(counts.edit === 1 ? "edited a file" : "edited files");
+		const verb = isPending ? "editing" : "edited";
+		phrases.push(counts.edit === 1 ? `${verb} a file` : `${verb} files`);
 	}
 	if (counts.bash > 0) {
-		phrases.push(counts.bash === 1 ? "ran a command" : "ran commands");
+		if (isPending) {
+			phrases.push(counts.bash === 1 ? "running a command" : "running commands");
+		} else {
+			phrases.push(counts.bash === 1 ? "ran a command" : "ran commands");
+		}
 	}
 	if (counts.search > 0) {
-		phrases.push("searched the web");
+		phrases.push(isPending ? "searching the web" : "searched the web");
 	}
 	if (counts.other > 0 && phrases.length === 0) {
-		phrases.push(counts.other === 1 ? "ran a tool" : "ran tools");
+		if (isPending) {
+			phrases.push(counts.other === 1 ? "running a tool" : "running tools");
+		} else {
+			phrases.push(counts.other === 1 ? "ran a tool" : "ran tools");
+		}
 	}
 
-	if (!phrases.length) return "tools done";
+	if (!phrases.length) return isPending ? "tool calling..." : "tools done";
 	// Capitalize first phrase, keep others lowercase as they are
 	phrases[0] = phrases[0]!.charAt(0).toUpperCase() + phrases[0]!.slice(1);
 	return phrases.join(", ");
@@ -699,7 +715,9 @@ function groupHeader(tools: GroupTool[], thinking: boolean, frame: string, fg: (
 		return fg(color, `${working ? frame : failed ? "✗" : "✓"} ${label}${detail}`);
 	}
 
-	const label = pending ? "tool calling..." : thinking ? "thinking..." : formatActionsSummary(tools);
+	const label = thinking && !tools.length
+		? "thinking..."
+		: formatActionsSummary(tools, pending);
 	let detail = "";
 	if (failed) detail += ` · ${failed} failed`;
 	if (tools.length && !working) {

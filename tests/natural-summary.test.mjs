@@ -61,3 +61,37 @@ test("formatActionsSummary handles standard tool combinations (loaded tool, read
 		"Loaded a tool, read files, ran commands"
 	);
 });
+
+test("formatActionsSummary supports present tense (isPending=true) during tool execution", () => {
+	assert.equal(
+		formatActionsSummary([{ name: "bash", args: { command: "ls" } }], true),
+		"Running a command"
+	);
+	assert.equal(
+		formatActionsSummary([
+			{ name: "bash", args: { command: "ls" } },
+			{ name: "bash", args: { command: "pwd" } }
+		], true),
+		"Running commands"
+	);
+	assert.equal(
+		formatActionsSummary([
+			{ name: "read", args: { path: "a.ts" } },
+			{ name: "read", args: { path: "b.ts" } }
+		], true),
+		"Reading files"
+	);
+	assert.equal(
+		formatActionsSummary([
+			{ name: "read", args: { path: "/Users/test/.pi/agent/skills/simplify/SKILL.md" } }
+		], true),
+		"Reading simplify skill"
+	);
+	assert.equal(
+		formatActionsSummary([
+			{ name: "read", args: { path: "a.ts" } },
+			{ name: "bash", args: { command: "ls" } }
+		], true),
+		"Reading a file, running a command"
+	);
+});
