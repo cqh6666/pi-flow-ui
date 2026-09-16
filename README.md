@@ -102,6 +102,7 @@ Use `/compact-ui-config` for numeric display settings. Configuration is stored a
 | `expandedThinkingLines` | `10` | Thinking-preview lines when expanded |
 | `standaloneTools` | `["compress"]` | Tools excluded from ordinary grouping |
 | `headerStyle` | `"compact"` | Header style: `"compact"` (`tools done · N tools`) or `"natural"` (Codex-style: `Loaded a tool, read files, ran commands`) |
+| `toolActions` | `{}` | Custom verb mapping for natural header style, e.g. `{"todo": {"past": "updated tasks", "present": "updating tasks"}}` |
 
 Default configuration:
 
@@ -111,7 +112,29 @@ Default configuration:
   "expandedToolLines": 5,
   "expandedThinkingLines": 10,
   "standaloneTools": ["compress"],
-  "headerStyle": "compact"
+  "headerStyle": "compact",
+  "toolActions": {}
+}
+```
+
+### Custom Tool Actions (Natural Style)
+
+When using `"headerStyle": "natural"`, you can define custom past and present tense phrases for any tool or custom extension:
+
+```json
+{
+  "headerStyle": "natural",
+  "toolActions": {
+    "todo": {
+      "past": "updated tasks",
+      "present": "updating tasks"
+    },
+    "send_file_to_wechat": {
+      "past": "sent file to WeChat",
+      "present": "sending file to WeChat"
+    },
+    "fetch_github": "synced repository"
+  }
 }
 ```
 

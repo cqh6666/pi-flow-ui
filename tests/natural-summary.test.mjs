@@ -8,9 +8,8 @@ test("isImagePath accurately detects common raster and vector image formats", ()
 	assert.equal(isImagePath("test.png"), true);
 	assert.equal(isImagePath("/path/to/cat.jpg"), true);
 	assert.equal(isImagePath("IMAGE.JPEG"), true);
-	assert.equal(isImagePath("icon.svg"), true);
-	assert.equal(isImagePath("pic.webp"), true);
-	assert.equal(isImagePath("photo.gif"), true);
+	assert.equal(isImagePath("vector.svg"), true);
+	assert.equal(isImagePath("icon.ico"), true);
 	assert.equal(isImagePath("index.ts"), false);
 	assert.equal(isImagePath(undefined), false);
 	assert.equal(isImagePath(123), false);
@@ -95,3 +94,73 @@ test("formatActionsSummary supports present tense (isPending=true) during tool e
 		"Reading a file, running a command"
 	);
 });
+
+test("formatActionsSummary accurately formats search, directory, task, context and custom tools", () => {
+	assert.equal(
+		formatActionsSummary([{ name: "grep", args: { pattern: "test" } }]),
+		"Searched code"
+	);
+	assert.equal(
+		formatActionsSummary([{ name: "find", args: { pattern: "*.ts" } }], true),
+		"Searching code"
+	);
+	assert.equal(
+		formatActionsSummary([{ name: "ls", args: { path: "." } }]),
+		"Browsed directory"
+	);
+	assert.equal(
+		formatActionsSummary([{ name: "compress", args: {} }]),
+		"Managed context"
+	);
+	assert.equal(
+		formatActionsSummary([{ name: "task_start", args: { command: "echo 1" } }]),
+		"Ran a task"
+	);
+	assert.equal(
+		formatActionsSummary([{ name: "todo", args: {} }]),
+		"Ran todo"
+	);
+	assert.equal(
+		formatActionsSummary([{ name: "todo", args: {} }], true),
+		"Running todo"
+	);
+	assert.equal(
+		formatActionsSummary([
+			{ name: "grep", args: {} },
+			{ name: "read", args: { path: "a.ts" } },
+			{ name: "edit", args: { path: "a.ts" } },
+			{ name: "bash", args: { command: "npm test" } }
+		]),
+		"Read a file, edited a file, ran a command (+1 more)"
+	);
+});
+
+test("formatActionsSummary respects custom configured tool actions", () => {
+	const customActions = {
+		todo: { past: "updated task list", present: "updating task list" },
+		send_file_to_wechat: { past: "sent file to WeChat", present: "sending file to WeChat" },
+		fetch_github: "synced repo"
+	};
+
+	assert.equal(
+		formatActionsSummary([{ name: "todo", args: {} }], false, customActions),
+		"Updated task list"
+	);
+	assert.equal(
+		formatActionsSummary([{ name: "todo", args: {} }], true, customActions),
+		"Updating task list"
+	);
+	assert.equal(
+		formatActionsSummary([{ name: "send_file_to_wechat", args: {} }], false, customActions),
+		"Sent file to WeChat"
+	);
+	assert.equal(
+		formatActionsSummary([{ name: "send_file_to_wechat", args: {} }], true, customActions),
+		"Sending file to WeChat"
+	);
+	assert.equal(
+		formatActionsSummary([{ name: "fetch_github", args: {} }], false, customActions),
+		"Synced repo"
+	);
+});
+

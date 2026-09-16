@@ -59,12 +59,18 @@ import { pathToFileURL } from "node:url";
 // Config
 // =============================================================================
 const CONFIG_PATH = join(homedir(), ".pi", "agent", "compact-ui.json");
+interface ToolActionConfig {
+	past: string;
+	present: string;
+}
+
 interface CompactUiConfig {
 	collapsedMaxLines: number;
 	expandedToolLines: number;
 	expandedThinkingLines: number;
 	standaloneTools?: string[];
 	headerStyle?: "natural" | "compact";
+	toolActions?: Record<string, ToolActionConfig | string>;
 }
 
 const DEFAULT_CONFIG: CompactUiConfig = {
@@ -73,6 +79,7 @@ const DEFAULT_CONFIG: CompactUiConfig = {
 	expandedThinkingLines: 10,
 	standaloneTools: ["compress", "acp_delegate", "acp_delegate_wait", "subagent"],
 	headerStyle: "compact",
+	toolActions: {},
 };
 let config: CompactUiConfig = { ...DEFAULT_CONFIG };
 try {
@@ -83,6 +90,9 @@ try {
 		standaloneTools: Array.isArray(loaded.standaloneTools)
 			? loaded.standaloneTools
 			: DEFAULT_CONFIG.standaloneTools,
+		toolActions: typeof loaded.toolActions === "object" && loaded.toolActions !== null
+			? loaded.toolActions
+			: DEFAULT_CONFIG.toolActions,
 	};
 } catch {
 	// first run — use defaults
@@ -599,8 +609,13 @@ export function isImagePath(path: unknown): boolean {
 	return /\.(png|jpe?g|gif|webp|bmp|ico|tiff?|svg)$/i.test(path);
 }
 
-export function formatActionsSummary(tools: { name?: string; args?: unknown }[], isPending = false): string {
+export function formatActionsSummary(
+	tools: { name?: string; args?: unknown }[],
+	isPending = false,
+	customToolActions?: Record<string, ToolActionConfig | string>,
+): string {
 	if (!tools.length) return isPending ? "tool calling..." : "tools done";
+	const effectiveCustomActions = customToolActions || config.toolActions || {};
 	const counts = {
 		skills: new Set<string>(),
 		images: 0,
@@ -608,16 +623,45 @@ export function formatActionsSummary(tools: { name?: string; args?: unknown }[],
 		read: 0,
 		edit: 0,
 		bash: 0,
-		search: 0,
-		other: 0,
+		webSearch: 0,
+		codeSearch: 0,
+		directory: 0,
+		task: 0,
+		context: 0,
+		custom: new Map<string, { past: string; present: string; count: number }>(),
+		otherNames: [] as string[],
 	};
 
 	for (const tool of tools) {
 		const name = tool.name;
 		if (!name) {
-			counts.other++;
+			counts.otherNames.push("tool");
 			continue;
 		}
+
+		// Check user-configured custom tool actions first
+		if (effectiveCustomActions[name]) {
+			const actionDef = effectiveCustomActions[name];
+			let past = "";
+			let present = "";
+			if (typeof actionDef === "string") {
+				past = actionDef;
+				present = actionDef;
+			} else if (actionDef && typeof actionDef === "object") {
+				past = actionDef.past || "";
+				present = actionDef.present || actionDef.past || "";
+			}
+			if (past || present) {
+				const existing = counts.custom.get(name);
+				if (existing) {
+					existing.count++;
+				} else {
+					counts.custom.set(name, { past, present, count: 1 });
+				}
+				continue;
+			}
+		}
+
 		if (name === "read") {
 			const path = (tool.args as any)?.path;
 			const skill = extractSkillName(path);
@@ -635,11 +679,19 @@ export function formatActionsSummary(tools: { name?: string; args?: unknown }[],
 		} else if (name === "bash") {
 			counts.bash++;
 		} else if (name === "web_search" || name === "source_check" || name === "fetch_content") {
-			counts.search++;
+			counts.webSearch++;
+		} else if (name === "grep" || name === "find" || name === "zvec_grep_search") {
+			counts.codeSearch++;
+		} else if (name === "ls") {
+			counts.directory++;
+		} else if (name.startsWith("task_") || name.startsWith("acp_delegate") || name === "subagent") {
+			counts.task++;
+		} else if (name === "compress" || name === "decompress") {
+			counts.context++;
 		} else if (name.includes("load") || name === "tool_search" || name === "ToolSearch") {
 			counts.loadTool++;
 		} else {
-			counts.other++;
+			counts.otherNames.push(name);
 		}
 	}
 
@@ -680,21 +732,54 @@ export function formatActionsSummary(tools: { name?: string; args?: unknown }[],
 			phrases.push(counts.bash === 1 ? "ran a command" : "ran commands");
 		}
 	}
-	if (counts.search > 0) {
+	if (counts.codeSearch > 0) {
+		phrases.push(isPending ? "searching code" : "searched code");
+	}
+	if (counts.directory > 0) {
+		phrases.push(isPending ? "browsing directory" : "browsed directory");
+	}
+	if (counts.webSearch > 0) {
 		phrases.push(isPending ? "searching the web" : "searched the web");
 	}
-	if (counts.other > 0 && phrases.length === 0) {
+	if (counts.task > 0) {
 		if (isPending) {
-			phrases.push(counts.other === 1 ? "running a tool" : "running tools");
+			phrases.push(counts.task === 1 ? "running a task" : "running tasks");
 		} else {
-			phrases.push(counts.other === 1 ? "ran a tool" : "ran tools");
+			phrases.push(counts.task === 1 ? "ran a task" : "ran tasks");
+		}
+	}
+	if (counts.context > 0) {
+		phrases.push(isPending ? "managing context" : "managed context");
+	}
+
+	for (const [, item] of counts.custom) {
+		const text = isPending ? item.present : item.past;
+		if (text && !phrases.includes(text)) {
+			phrases.push(text);
+		}
+	}
+
+	if (counts.otherNames.length > 0 && phrases.length === 0) {
+		if (counts.otherNames.length === 1) {
+			const toolName = counts.otherNames[0]!;
+			phrases.push(isPending ? `running ${toolName}` : `ran ${toolName}`);
+		} else {
+			phrases.push(isPending ? "running tools" : "ran tools");
 		}
 	}
 
 	if (!phrases.length) return isPending ? "tool calling..." : "tools done";
+
+	let result: string;
+	if (phrases.length <= 3) {
+		result = phrases.join(", ");
+	} else {
+		const more = phrases.length - 3;
+		result = `${phrases[0]}, ${phrases[1]}, ${phrases[2]} (+${more} more)`;
+	}
+
 	// Capitalize first phrase, keep others lowercase as they are
-	phrases[0] = phrases[0]!.charAt(0).toUpperCase() + phrases[0]!.slice(1);
-	return phrases.join(", ");
+	return result.charAt(0).toUpperCase() + result.slice(1);
 }
 
 function groupHeader(tools: GroupTool[], thinking: boolean, frame: string, fg: (color: string, text: string) => string, isWorking?: boolean): string {
