@@ -212,6 +212,7 @@ function makeChoicePicker(
 	let cachedWidth: number | undefined;
 	let cachedLines: string[] | undefined;
 	const fg = (color: string, t: string) => theme?.fg?.(color, t) ?? t;
+	const isZh = config.language === "zh";
 
 	return {
 		render(width: number): string[] {
