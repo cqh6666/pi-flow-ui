@@ -98,6 +98,7 @@ Configuration is persisted at `~/.pi/agent/compact-ui.json`:
 
 | Setting | Default | Purpose |
 |---|---:|---|
+| `language` | `"en"` | Language for summaries and headers: `"en"` (English) or `"zh"` (简体中文) |
 | `headerStyle` | `"compact"` | Header style: `"compact"` (`tools done · N tools`) or `"natural"` (Codex-style: `Loaded a tool, read files, ran commands`) |
 | `collapsedMaxLines` | `3` | Maximum lines shown when a tool group is collapsed |
 | `expandedToolLines` | `5` | Result-preview lines per expanded tool |
@@ -109,9 +110,10 @@ Configuration is persisted at `~/.pi/agent/compact-ui.json`:
 
 Run `/compact-ui-config` directly inside Pi:
 
+- **Language / 语言**: Press `Enter` to switch between `English` and `简体中文`.
 - **Header style**: Press `Enter` on Header style to open the picker, use `▲`/`▼` (or `j`/`k`) to switch between:
-  - `compact`: e.g. `✓ tools done · 3 tools · 1.2s`
-  - `natural`: e.g. `✓ Read a file, ran commands · 1.2s`
+  - `compact`: e.g. `✓ tools done · 3 tools · 1.2s` (或 `✓ 工具调用完成 · 3 个工具 · 1.2s`)
+  - `natural`: e.g. `✓ Read a file, ran commands · 1.2s` (或 `✓ 读取了文件，执行了命令 · 1.2s`)
 - **Line limits**: Press `Enter` to open a slider stepper, adjust with `◀`/`▶` (or `−`/`+`), then press `Enter` to save.
 - Settings are saved automatically to `~/.pi/agent/compact-ui.json` and take effect immediately.
 
@@ -119,6 +121,7 @@ Run `/compact-ui-config` directly inside Pi:
 
 ```json
 {
+  "language": "en",
   "collapsedMaxLines": 3,
   "expandedToolLines": 5,
   "expandedThinkingLines": 10,

@@ -164,3 +164,32 @@ test("formatActionsSummary respects custom configured tool actions", () => {
 	);
 });
 
+test("formatActionsSummary supports Chinese language mode", () => {
+	assert.equal(
+		formatActionsSummary([{ name: "bash", args: { command: "npm test" } }], false, {}, "zh"),
+		"执行了命令"
+	);
+	assert.equal(
+		formatActionsSummary([{ name: "bash", args: { command: "npm test" } }], true, {}, "zh"),
+		"正在执行命令"
+	);
+	assert.equal(
+		formatActionsSummary([
+			{ name: "read", args: { path: "a.ts" } },
+			{ name: "edit", args: { path: "a.ts" } },
+			{ name: "bash", args: { command: "npm test" } }
+		], false, {}, "zh"),
+		"读取了文件，编辑了文件，执行了命令"
+	);
+	assert.equal(
+		formatActionsSummary([
+			{ name: "grep", args: {} },
+			{ name: "read", args: { path: "a.ts" } },
+			{ name: "edit", args: { path: "a.ts" } },
+			{ name: "bash", args: { command: "npm test" } }
+		], false, {}, "zh"),
+		"读取了文件，编辑了文件，执行了命令 (等共 4 项)"
+	);
+});
+
+

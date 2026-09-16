@@ -70,6 +70,7 @@ interface CompactUiConfig {
 	expandedThinkingLines: number;
 	standaloneTools?: string[];
 	headerStyle?: "natural" | "compact";
+	language?: "en" | "zh";
 	toolActions?: Record<string, ToolActionConfig | string>;
 }
 
@@ -79,6 +80,7 @@ const DEFAULT_CONFIG: CompactUiConfig = {
 	expandedThinkingLines: 10,
 	standaloneTools: ["compress", "acp_delegate", "acp_delegate_wait", "subagent"],
 	headerStyle: "compact",
+	language: "en",
 	toolActions: {},
 };
 function loadConfig(): CompactUiConfig {
@@ -678,8 +680,16 @@ export function formatActionsSummary(
 	tools: { name?: string; args?: unknown }[],
 	isPending = false,
 	customToolActions?: Record<string, ToolActionConfig | string>,
+	lang?: "en" | "zh",
 ): string {
-	if (!tools.length) return isPending ? "tool calling..." : "tools done";
+	const currentLang = lang || config.language || "en";
+	const isZh = currentLang === "zh";
+
+	if (!tools.length) {
+		if (isZh) return isPending ? "正在调用工具..." : "工具调用完成";
+		return isPending ? "tool calling..." : "tools done";
+	}
+
 	const effectiveCustomActions = customToolActions || config.toolActions || {};
 	const counts = {
 		skills: new Set<string>(),
@@ -762,59 +772,100 @@ export function formatActionsSummary(
 
 	const phrases: string[] = [];
 
-	if (counts.loadTool > 0) {
-		if (isPending) {
-			phrases.push(counts.loadTool === 1 ? "loading a tool" : "loading tools");
-		} else {
-			phrases.push(counts.loadTool === 1 ? "loaded a tool" : "loaded tools");
+	if (isZh) {
+		if (counts.loadTool > 0) {
+			phrases.push(isPending ? "正在加载工具" : (counts.loadTool === 1 ? "加载了工具" : `加载了 ${counts.loadTool} 个工具`));
 		}
-	}
-	if (counts.skills.size > 0) {
-		const skillNames = Array.from(counts.skills);
-		const verb = isPending ? "reading" : "read";
-		if (skillNames.length === 1) {
-			phrases.push(`${verb} ${skillNames[0]} skill`);
-		} else {
-			phrases.push(`${verb} ${skillNames.length} skills`);
+		if (counts.skills.size > 0) {
+			const skillNames = Array.from(counts.skills);
+			if (skillNames.length === 1) {
+				phrases.push(isPending ? `正在读取 ${skillNames[0]} 技能` : `读取了 ${skillNames[0]} 技能`);
+			} else {
+				phrases.push(isPending ? `正在读取 ${skillNames.length} 个技能` : `读取了 ${skillNames.length} 个技能`);
+			}
 		}
-	}
-	if (counts.images > 0) {
-		const verb = isPending ? "viewing" : "viewed";
-		phrases.push(counts.images === 1 ? `${verb} an image` : `${verb} ${counts.images} images`);
-	}
-	if (counts.read > 0) {
-		const verb = isPending ? "reading" : "read";
-		phrases.push(counts.read === 1 ? `${verb} a file` : `${verb} files`);
-	}
-	if (counts.edit > 0) {
-		const verb = isPending ? "editing" : "edited";
-		phrases.push(counts.edit === 1 ? `${verb} a file` : `${verb} files`);
-	}
-	if (counts.bash > 0) {
-		if (isPending) {
-			phrases.push(counts.bash === 1 ? "running a command" : "running commands");
-		} else {
-			phrases.push(counts.bash === 1 ? "ran a command" : "ran commands");
+		if (counts.images > 0) {
+			phrases.push(isPending ? `正在查看 ${counts.images} 张图片` : (counts.images === 1 ? "查看了图片" : `查看了 ${counts.images} 张图片`));
 		}
-	}
-	if (counts.codeSearch > 0) {
-		phrases.push(isPending ? "searching code" : "searched code");
-	}
-	if (counts.directory > 0) {
-		phrases.push(isPending ? "browsing directory" : "browsed directory");
-	}
-	if (counts.webSearch > 0) {
-		phrases.push(isPending ? "searching the web" : "searched the web");
-	}
-	if (counts.task > 0) {
-		if (isPending) {
-			phrases.push(counts.task === 1 ? "running a task" : "running tasks");
-		} else {
-			phrases.push(counts.task === 1 ? "ran a task" : "ran tasks");
+		if (counts.read > 0) {
+			phrases.push(isPending ? (counts.read === 1 ? "正在读取文件" : `正在读取 ${counts.read} 个文件`) : (counts.read === 1 ? "读取了文件" : `读取了 ${counts.read} 个文件`));
 		}
-	}
-	if (counts.context > 0) {
-		phrases.push(isPending ? "managing context" : "managed context");
+		if (counts.edit > 0) {
+			phrases.push(isPending ? (counts.edit === 1 ? "正在编辑文件" : `正在编辑 ${counts.edit} 个文件`) : (counts.edit === 1 ? "编辑了文件" : `编辑了 ${counts.edit} 个文件`));
+		}
+		if (counts.bash > 0) {
+			phrases.push(isPending ? (counts.bash === 1 ? "正在执行命令" : `正在执行 ${counts.bash} 条命令`) : (counts.bash === 1 ? "执行了命令" : `执行了 ${counts.bash} 条命令`));
+		}
+		if (counts.codeSearch > 0) {
+			phrases.push(isPending ? "正在检索代码" : "检索了代码");
+		}
+		if (counts.directory > 0) {
+			phrases.push(isPending ? "正在浏览目录" : "浏览了目录");
+		}
+		if (counts.webSearch > 0) {
+			phrases.push(isPending ? "正在搜索网络" : "搜索了网络");
+		}
+		if (counts.task > 0) {
+			phrases.push(isPending ? (counts.task === 1 ? "正在执行任务" : `正在执行 ${counts.task} 个任务`) : (counts.task === 1 ? "执行了任务" : `执行了 ${counts.task} 个任务`));
+		}
+		if (counts.context > 0) {
+			phrases.push(isPending ? "正在管理上下文" : "管理了上下文");
+		}
+	} else {
+		if (counts.loadTool > 0) {
+			if (isPending) {
+				phrases.push(counts.loadTool === 1 ? "loading a tool" : "loading tools");
+			} else {
+				phrases.push(counts.loadTool === 1 ? "loaded a tool" : "loaded tools");
+			}
+		}
+		if (counts.skills.size > 0) {
+			const skillNames = Array.from(counts.skills);
+			const verb = isPending ? "reading" : "read";
+			if (skillNames.length === 1) {
+				phrases.push(`${verb} ${skillNames[0]} skill`);
+			} else {
+				phrases.push(`${verb} ${skillNames.length} skills`);
+			}
+		}
+		if (counts.images > 0) {
+			const verb = isPending ? "viewing" : "viewed";
+			phrases.push(counts.images === 1 ? `${verb} an image` : `${verb} ${counts.images} images`);
+		}
+		if (counts.read > 0) {
+			const verb = isPending ? "reading" : "read";
+			phrases.push(counts.read === 1 ? `${verb} a file` : `${verb} files`);
+		}
+		if (counts.edit > 0) {
+			const verb = isPending ? "editing" : "edited";
+			phrases.push(counts.edit === 1 ? `${verb} a file` : `${verb} files`);
+		}
+		if (counts.bash > 0) {
+			if (isPending) {
+				phrases.push(counts.bash === 1 ? "running a command" : "running commands");
+			} else {
+				phrases.push(counts.bash === 1 ? "ran a command" : "ran commands");
+			}
+		}
+		if (counts.codeSearch > 0) {
+			phrases.push(isPending ? "searching code" : "searched code");
+		}
+		if (counts.directory > 0) {
+			phrases.push(isPending ? "browsing directory" : "browsed directory");
+		}
+		if (counts.webSearch > 0) {
+			phrases.push(isPending ? "searching the web" : "searched the web");
+		}
+		if (counts.task > 0) {
+			if (isPending) {
+				phrases.push(counts.task === 1 ? "running a task" : "running tasks");
+			} else {
+				phrases.push(counts.task === 1 ? "ran a task" : "ran tasks");
+			}
+		}
+		if (counts.context > 0) {
+			phrases.push(isPending ? "managing context" : "managed context");
+		}
 	}
 
 	for (const [, item] of counts.custom) {
@@ -825,17 +876,39 @@ export function formatActionsSummary(
 	}
 
 	if (counts.otherNames.length > 0 && phrases.length === 0) {
-		if (counts.otherNames.length === 1) {
-			const toolName = counts.otherNames[0]!;
-			phrases.push(isPending ? `running ${toolName}` : `ran ${toolName}`);
+		if (isZh) {
+			if (counts.otherNames.length === 1) {
+				const toolName = counts.otherNames[0]!;
+				phrases.push(isPending ? `正在运行 ${toolName}` : `运行了 ${toolName}`);
+			} else {
+				phrases.push(isPending ? "正在运行工具" : "运行了工具");
+			}
 		} else {
-			phrases.push(isPending ? "running tools" : "ran tools");
+			if (counts.otherNames.length === 1) {
+				const toolName = counts.otherNames[0]!;
+				phrases.push(isPending ? `running ${toolName}` : `ran ${toolName}`);
+			} else {
+				phrases.push(isPending ? "running tools" : "ran tools");
+			}
 		}
 	}
 
-	if (!phrases.length) return isPending ? "tool calling..." : "tools done";
+	if (!phrases.length) {
+		if (isZh) return isPending ? "正在调用工具..." : "工具调用完成";
+		return isPending ? "tool calling..." : "tools done";
+	}
 
 	let result: string;
+	if (isZh) {
+		if (phrases.length <= 3) {
+			result = phrases.join("，");
+		} else {
+			const more = phrases.length - 3;
+			result = `${phrases[0]}，${phrases[1]}，${phrases[2]} (等共 ${phrases.length} 项)`;
+		}
+		return result;
+	}
+
 	if (phrases.length <= 3) {
 		result = phrases.join(", ");
 	} else {
@@ -852,11 +925,21 @@ function groupHeader(tools: GroupTool[], thinking: boolean, frame: string, fg: (
 	const failed = tools.filter((tool) => tool.status === "error").length;
 	const working = isWorking !== undefined ? (isWorking || pending || thinking) : (pending || thinking);
 	const color = failed ? "error" : working ? "accent" : "success";
-	
+	const isZh = config.language === "zh";
+
 	if (config.headerStyle === "compact") {
-		const label = working ? "tool calling..." : "tools done";
-		let detail = tools.length ? ` · ${tools.length} ${tools.length === 1 ? "tool" : "tools"}` : "";
-		if (failed) detail += ` · ${failed} failed`;
+		const label = isZh
+			? (working ? "正在调用工具..." : "工具调用完成")
+			: (working ? "tool calling..." : "tools done");
+		let detail = "";
+		if (tools.length) {
+			detail = isZh
+				? ` · ${tools.length} 个工具`
+				: ` · ${tools.length} ${tools.length === 1 ? "tool" : "tools"}`;
+		}
+		if (failed) {
+			detail += isZh ? ` · ${failed} 个失败` : ` · ${failed} failed`;
+		}
 		if (tools.length && !working) {
 			const known = tools.every((tool) => tool.startedAt !== undefined && tool.endedAt !== undefined && tool.endedAt >= tool.startedAt);
 			const elapsed = known ? ((Math.max(...tools.map((tool) => tool.endedAt!)) - Math.min(...tools.map((tool) => tool.startedAt!))) / 1000).toFixed(1) : "—";
@@ -866,10 +949,12 @@ function groupHeader(tools: GroupTool[], thinking: boolean, frame: string, fg: (
 	}
 
 	const label = thinking && !tools.length
-		? "thinking..."
+		? (isZh ? "正在思考..." : "thinking...")
 		: formatActionsSummary(tools, working);
 	let detail = "";
-	if (failed) detail += ` · ${failed} failed`;
+	if (failed) {
+		detail += isZh ? ` · ${failed} 个失败` : ` · ${failed} failed`;
+	}
 	if (tools.length && !working) {
 		const known = tools.every((tool) => tool.startedAt !== undefined && tool.endedAt !== undefined && tool.endedAt >= tool.startedAt);
 		const elapsed = known ? ((Math.max(...tools.map((tool) => tool.endedAt!)) - Math.min(...tools.map((tool) => tool.startedAt!))) / 1000).toFixed(1) : "—";
@@ -2376,10 +2461,16 @@ function removeComponentFromContainer(container: any, component: any): void {
 }
 
 function formatWorkedTime(elapsedMs: number): string {
+	const isZh = config.language === "zh";
 	const totalSec = Math.max(1, Math.round(elapsedMs / 1000));
 	const hours = Math.floor(totalSec / 3600);
 	const minutes = Math.floor((totalSec % 3600) / 60);
 	const seconds = totalSec % 60;
+	if (isZh) {
+		if (hours > 0) return minutes > 0 ? `${hours}小时 ${minutes}分钟` : `${hours}小时`;
+		if (minutes > 0) return seconds > 0 ? `${minutes}分 ${seconds}秒` : `${minutes}分钟`;
+		return `${seconds}秒`;
+	}
 	if (hours > 0) return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
 	if (minutes > 0) return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
 	return `${seconds}s`;
@@ -2397,7 +2488,8 @@ class TurnDividerComponent {
 	render(width: number): string[] {
 		const theme = currentTheme;
 		const fg = (color: string, text: string) => theme?.fg?.(color, text) ?? text;
-		const middle = `worked for ${this.timeLabel}`;
+		const isZh = config.language === "zh";
+		const middle = isZh ? `耗时 ${this.timeLabel}` : `worked for ${this.timeLabel}`;
 		const avail = Math.max(6, width - middle.length - 2);
 		const left = Math.floor(avail / 2);
 		const right = avail - left;
@@ -2901,6 +2993,23 @@ export default function (pi: ExtensionAPI) {
 				let anyChanged = false;
 				const items: SettingItem[] = [
 					{
+						id: "language",
+						label: "Language / 语言",
+						currentValue: config.language ?? "en",
+						description: "UI summary language (en: English, zh: 简体中文)",
+						submenu: (currentValue: string, subDone: (value?: string) => void) =>
+							makeChoicePicker(
+								"Language / 语言",
+								currentValue,
+								[
+									{ value: "en", label: "English", description: "English UI summaries" },
+									{ value: "zh", label: "简体中文", description: "中文界面提示与操作摘要" },
+								],
+								theme,
+								subDone,
+							),
+					},
+					{
 						id: "headerStyle",
 						label: "Header style",
 						currentValue: config.headerStyle ?? "compact",
@@ -2934,6 +3043,8 @@ export default function (pi: ExtensionAPI) {
 						// Persist and refresh the live groups when SettingsList commits a change.
 						if (id === "headerStyle") {
 							config.headerStyle = newValue as "natural" | "compact";
+						} else if (id === "language") {
+							config.language = newValue as "en" | "zh";
 						} else {
 							(config as any)[id] = Number(newValue);
 						}
