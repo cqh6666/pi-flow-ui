@@ -701,7 +701,7 @@ function groupHeader(tools: GroupTool[], thinking: boolean, frame: string, fg: (
 	const pending = tools.some((tool) => tool.status === "pending");
 	const failed = tools.filter((tool) => tool.status === "error").length;
 	const working = pending || thinking;
-	const color = failed ? "error" : pending ? "accent" : thinking ? "thinkingText" : "success";
+	const color = failed ? "error" : working ? "accent" : "success";
 	
 	if (config.headerStyle === "compact") {
 		const label = pending ? "tool calling..." : thinking ? "thinking..." : "tools done";
