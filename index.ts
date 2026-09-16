@@ -1,5 +1,5 @@
 /**
- * compact-ui: merge thinking + tool calls into a single tree-shaped block.
+ * flow-ui: merge thinking + tool calls into a single flow-style block.
  *
  * Tool calls are intercepted at the container-prototype level (like
  * pi-cc-extensions) and collected into a ToolGroupComponent rendered in place
@@ -12,9 +12,9 @@
  *   └  · thinking: Planning... · ≈1.2K tok
  *
  * Ctrl+O toggles collapse/expand (via setExpanded, same as built-in tools).
- * Expand line counts are configurable via /compact-config (interactive
+ * Expand line counts are configurable via /flow-ui-config (interactive
  * settings menu, arrows to select, Enter to adjust, Esc to close) and are
- * persisted to ~/.pi/agent/compact-ui.json:
+ * persisted to ~/.pi/agent/flow-ui.json:
  *   { "collapsedMaxLines": 3, "expandedToolLines": 5, "expandedThinkingLines": 10 }
  */
 
@@ -58,13 +58,14 @@ import { pathToFileURL } from "node:url";
 // =============================================================================
 // Config
 // =============================================================================
-const CONFIG_PATH = join(homedir(), ".pi", "agent", "compact-ui.json");
+const CONFIG_PATH = join(homedir(), ".pi", "agent", "flow-ui.json");
+const LEGACY_CONFIG_PATH = join(homedir(), ".pi", "agent", "compact-ui.json");
 interface ToolActionConfig {
 	past: string;
 	present: string;
 }
 
-interface CompactUiConfig {
+interface FlowUiConfig {
 	collapsedMaxLines: number;
 	expandedToolLines: number;
 	expandedThinkingLines: number;
@@ -74,7 +75,7 @@ interface CompactUiConfig {
 	toolActions?: Record<string, ToolActionConfig | string>;
 }
 
-const DEFAULT_CONFIG: CompactUiConfig = {
+const DEFAULT_CONFIG: FlowUiConfig = {
 	collapsedMaxLines: 3,
 	expandedToolLines: 5,
 	expandedThinkingLines: 10,
@@ -83,25 +84,28 @@ const DEFAULT_CONFIG: CompactUiConfig = {
 	language: "en",
 	toolActions: {},
 };
-function loadConfig(): CompactUiConfig {
-	try {
-		const loaded = JSON.parse(readFileSync(CONFIG_PATH, "utf-8"));
-		return {
-			...DEFAULT_CONFIG,
-			...loaded,
-			standaloneTools: Array.isArray(loaded.standaloneTools)
-				? loaded.standaloneTools
-				: DEFAULT_CONFIG.standaloneTools,
-			toolActions: typeof loaded.toolActions === "object" && loaded.toolActions !== null
-				? loaded.toolActions
-				: DEFAULT_CONFIG.toolActions,
-		};
-	} catch {
-		return { ...DEFAULT_CONFIG };
+function loadConfig(): FlowUiConfig {
+	for (const path of [CONFIG_PATH, LEGACY_CONFIG_PATH]) {
+		try {
+			const loaded = JSON.parse(readFileSync(path, "utf-8"));
+			return {
+				...DEFAULT_CONFIG,
+				...loaded,
+				standaloneTools: Array.isArray(loaded.standaloneTools)
+					? loaded.standaloneTools
+					: DEFAULT_CONFIG.standaloneTools,
+				toolActions: typeof loaded.toolActions === "object" && loaded.toolActions !== null
+					? loaded.toolActions
+					: DEFAULT_CONFIG.toolActions,
+			};
+		} catch {
+			// ignore and try fallback
+		}
 	}
+	return { ...DEFAULT_CONFIG };
 }
 
-let config: CompactUiConfig = loadConfig();
+let config: FlowUiConfig = loadConfig();
 
 function reloadConfig(): void {
 	config = loadConfig();
@@ -2984,125 +2988,130 @@ export default function (pi: ExtensionAPI) {
 		pendingTextOrdinal = null;
 	});
 
-	pi.registerCommand("compact-ui-config", {
-		description: "Interactive compact-ui settings (arrows to select, Enter to adjust, Esc to close)",
-		handler: async (_args, ctx) => {
-			reloadConfig();
-			// Non-TUI modes (print/json) can't show the interactive menu.
-			if (!ctx.hasUI) {
-				ctx.ui.notify(
-					`compact: headerStyle=${config.headerStyle}, collapsedMaxLines=${config.collapsedMaxLines}, expandedToolLines=${config.expandedToolLines}, expandedThinkingLines=${config.expandedThinkingLines}`,
-					"info",
-				);
-				return;
-			}
+	const registerUiConfig = (commandName: string) => {
+		pi.registerCommand(commandName, {
+			description: "Interactive flow-ui settings (arrows to select, Enter to adjust, Esc to close)",
+			handler: async (_args, ctx) => {
+				reloadConfig();
+				// Non-TUI modes (print/json) can't show the interactive menu.
+				if (!ctx.hasUI) {
+					ctx.ui.notify(
+						`flow: headerStyle=${config.headerStyle}, collapsedMaxLines=${config.collapsedMaxLines}, expandedToolLines=${config.expandedToolLines}, expandedThinkingLines=${config.expandedThinkingLines}`,
+						"info",
+					);
+					return;
+				}
 
-			const isZh = (config.language ?? "en") === "zh";
-			const changed = await ctx.ui.custom<boolean>((tui, theme, _keybindings, done) => {
-				let anyChanged = false;
-				const items: SettingItem[] = [
-					{
-						id: "language",
-						label: isZh ? "语言 (Language)" : "Language / 语言",
-						currentValue: config.language ?? "en",
-						description: isZh ? "界面与操作汇总提示语言 (en: 英文, zh: 简体中文)" : "UI summary language (en: English, zh: 简体中文)",
-						submenu: (currentValue: string, subDone: (value?: string) => void) =>
-							makeChoicePicker(
-								isZh ? "语言设置" : "Language / 语言",
-								currentValue,
-								[
-									{ value: "en", label: "English", description: isZh ? "英文界面汇总" : "English UI summaries" },
-									{ value: "zh", label: "简体中文", description: "中文界面提示与操作摘要" },
-								],
-								theme,
-								subDone,
-							),
-					},
-					{
-						id: "headerStyle",
-						label: isZh ? "头部样式 (Header style)" : "Header style",
-						currentValue: config.headerStyle ?? "compact",
-						description: isZh
-							? "工具组顶部汇总样式 (compact: 紧凑统计, natural: 类似 Codex 自然语言)"
-							: "Header summary style (compact: tools done, natural: Codex-like summary)",
-						submenu: (currentValue: string, subDone: (value?: string) => void) =>
-							makeChoicePicker(
-								isZh ? "头部样式" : "Header style",
-								currentValue,
-								[
-									{
-										value: "compact",
-										label: "compact",
-										description: isZh ? "紧凑统计 (如: 工具调用完成 · 3 个工具 · 1.2s)" : "Compact (e.g. tools done · 3 tools · 1.2s)",
-									},
-									{
-										value: "natural",
-										label: "natural",
-										description: isZh ? "自然语言概括 (如: 读取了文件，执行了命令)" : "Codex natural language (e.g. Read a file, ran commands)",
-									},
-								],
-								theme,
-								subDone,
-							),
-					},
-					...CONFIG_KEYS.map((meta) => {
-						const labelsZh: Record<string, { label: string; desc: string }> = {
-							collapsedMaxLines: { label: "折叠最大行数", desc: "工具组收起时最多显示的行数" },
-							expandedToolLines: { label: "展开工具输出行数", desc: "单个工具展开时显示的结果预览行数" },
-							expandedThinkingLines: { label: "展开思考输出行数", desc: "展开时显示的思考内容行数" },
-						};
-						return {
-							id: meta.id,
-							label: isZh ? (labelsZh[meta.id]?.label ?? meta.label) : meta.label,
-							currentValue: String((config as any)[meta.id]),
-							description: isZh ? (labelsZh[meta.id]?.desc ?? meta.description) : meta.description,
+				const isZh = (config.language ?? "en") === "zh";
+				const changed = await ctx.ui.custom<boolean>((tui, theme, _keybindings, done) => {
+					let anyChanged = false;
+					const items: SettingItem[] = [
+						{
+							id: "language",
+							label: isZh ? "语言 (Language)" : "Language / 语言",
+							currentValue: config.language ?? "en",
+							description: isZh ? "界面与操作汇总提示语言 (en: 英文, zh: 简体中文)" : "UI summary language (en: English, zh: 简体中文)",
 							submenu: (currentValue: string, subDone: (value?: string) => void) =>
-								makeStepper(
-									isZh ? (labelsZh[meta.id]?.label ?? meta.label) : meta.label,
-									Number(currentValue),
-									meta,
+								makeChoicePicker(
+									isZh ? "语言设置" : "Language / 语言",
+									currentValue,
+									[
+										{ value: "en", label: "English", description: isZh ? "英文界面汇总" : "English UI summaries" },
+										{ value: "zh", label: "简体中文", description: "中文界面提示与操作摘要" },
+									],
 									theme,
 									subDone,
 								),
-						};
-					}),
-				];
-				const settingsList = new SettingsList(
-					items,
-					Math.min(items.length, 15),
-					getSettingsListTheme(),
-					(id, newValue) => {
-						// Persist and refresh the live groups when SettingsList commits a change.
-						if (id === "headerStyle") {
-							config.headerStyle = newValue as "natural" | "compact";
-						} else if (id === "language") {
-							config.language = newValue as "en" | "zh";
-						} else {
-							(config as any)[id] = Number(newValue);
-						}
-						saveConfig();
-						anyChanged = true;
-						for (const g of groups) g.invalidate();
-					},
-					() => done(anyChanged),
-				);
-			return {
-				render(width: number) {
-					return settingsList.render(width);
-				},
-				invalidate() {
-					settingsList.invalidate();
-				},
-				handleInput(data: string) {
-					settingsList.handleInput?.(data);
-					tui.requestRender();
-				},
-			};
-		});
+						},
+						{
+							id: "headerStyle",
+							label: isZh ? "头部样式 (Header style)" : "Header style",
+							currentValue: config.headerStyle ?? "compact",
+							description: isZh
+								? "工具组顶部汇总样式 (compact: 紧凑统计, natural: 类似 Codex 自然语言)"
+								: "Header summary style (compact: tools done, natural: Codex-like summary)",
+							submenu: (currentValue: string, subDone: (value?: string) => void) =>
+								makeChoicePicker(
+									isZh ? "头部样式" : "Header style",
+									currentValue,
+									[
+										{
+											value: "compact",
+											label: "compact",
+											description: isZh ? "紧凑统计 (如: 工具调用完成 · 3 个工具 · 1.2s)" : "Compact (e.g. tools done · 3 tools · 1.2s)",
+										},
+										{
+											value: "natural",
+											label: "natural",
+											description: isZh ? "自然语言概括 (如: 读取了文件，执行了命令)" : "Codex natural language (e.g. Read a file, ran commands)",
+										},
+									],
+									theme,
+									subDone,
+								),
+						},
+						...CONFIG_KEYS.map((meta) => {
+							const labelsZh: Record<string, { label: string; desc: string }> = {
+								collapsedMaxLines: { label: "折叠最大行数", desc: "工具组收起时最多显示的行数" },
+								expandedToolLines: { label: "展开工具输出行数", desc: "单个工具展开时显示的结果预览行数" },
+								expandedThinkingLines: { label: "展开思考输出行数", desc: "展开时显示的思考内容行数" },
+							};
+							return {
+								id: meta.id,
+								label: isZh ? (labelsZh[meta.id]?.label ?? meta.label) : meta.label,
+								currentValue: String((config as any)[meta.id]),
+								description: isZh ? (labelsZh[meta.id]?.desc ?? meta.description) : meta.description,
+								submenu: (currentValue: string, subDone: (value?: string) => void) =>
+									makeStepper(
+										isZh ? (labelsZh[meta.id]?.label ?? meta.label) : meta.label,
+										Number(currentValue),
+										meta,
+										theme,
+										subDone,
+									),
+							};
+						}),
+					];
+					const settingsList = new SettingsList(
+						items,
+						Math.min(items.length, 15),
+						getSettingsListTheme(),
+						(id, newValue) => {
+							// Persist and refresh the live groups when SettingsList commits a change.
+							if (id === "headerStyle") {
+								config.headerStyle = newValue as "natural" | "compact";
+							} else if (id === "language") {
+								config.language = newValue as "en" | "zh";
+							} else {
+								(config as any)[id] = Number(newValue);
+							}
+							saveConfig();
+							anyChanged = true;
+							for (const g of groups) g.invalidate();
+						},
+						() => done(anyChanged),
+					);
+					return {
+						render(width: number) {
+							return settingsList.render(width);
+						},
+						invalidate() {
+							settingsList.invalidate();
+						},
+						handleInput(data: string) {
+							settingsList.handleInput?.(data);
+							tui.requestRender();
+						},
+					};
+				});
 
-		if (changed) {
-			ctx.ui.notify("compact-ui settings saved", "info");
-		}
-	},
-});
+				if (changed) {
+					ctx.ui.notify(isZh ? "flow-ui 配置已保存" : "flow-ui settings saved", "info");
+				}
+			},
+		});
+	};
+
+	registerUiConfig("flow-ui-config");
+	registerUiConfig("compact-ui-config");
 }

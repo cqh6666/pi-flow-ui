@@ -1,18 +1,13 @@
-# pi-compact-ui
+# pi-flow-ui
 
-Compact reasoning and tool-call groups for the [Pi Coding Agent](https://github.com/earendil-works/pi-mono).
+Codex-inspired flow transcript, natural language summaries, and interactive tool inspector for the [Pi Coding Agent](https://github.com/earendil-works/pi-mono).
 
-This is an independently maintained fork based on the npm release of
-[pi-compact-ui 0.1.3](https://www.npmjs.com/package/pi-compact-ui/v/0.1.3),
-maintained upstream by [geoffreychen777](https://www.npmjs.com/~geoffreychen777).
-The original package provides the compact tree layout and reasoning/tool grouping.
-This repository builds on that foundation with execution summaries, stable timing,
-failure previews, diff highlighting, and standalone tool support.
+pi-flow-ui transforms Pi's tool execution into an elegant, distraction-free workflow. It combines Codex-like natural language action summaries, two-level clickable tool inspector, failure previews, syntax-highlighted diffs, and bilingual (English/Chinese) support into a cohesive experience.
 
-## Install this fork
+## Install
 
 ```bash
-pi install git:github.com/cqh6666/pi-compact-ui@main
+pi install git:github.com/cqh6666/pi-flow-ui@main
 ```
 
 Then reload Pi:
@@ -21,50 +16,60 @@ Then reload Pi:
 /reload
 ```
 
-If you already load `npm:pi-compact-ui`, remove that entry from your Pi package
-configuration so that only one copy is loaded. The npm package is the upstream
-release; the Git URL above installs this fork.
-
 For a temporary session with a local checkout:
 
 ```bash
-pi -e /absolute/path/to/pi-compact-ui/index.ts
+pi -e /absolute/path/to/pi-flow-ui/index.ts
 ```
 
 `/reload` reloads installed files. It does not fetch newer Git commits.
 
-## What this fork adds
+## Key Features
 
-| Area | Behavior |
+| Feature | Description |
 |---|---|
-| Mouse expansion | Click a group, tool, or subagent card title to toggle it independently in fullscreen mode |
-| Group summaries | Tool count, failure count, and elapsed execution span |
-| Stable timing | Completed durations freeze; missing historical timing displays `—s` |
-| Thinking | Token usage and locally observed duration, excluding gaps between thinking segments |
-| Failure previews | The first failed tool and its cause take priority in the collapsed view |
-| File links | Common leading error locations link to local files in supported terminals |
-| Full logs | Expanded Bash results expose a supplied `fullOutputPath` outside the preview limit |
-| Subagent delegates | Formatted cards for `acp_delegate` / `subagent` with `⚡` badge, agent role, task summary, and hyperlinked output file paths |
-| Result summaries | Read line counts, edit additions/deletions, grep matches, search result counts, and confirmed Bash exit codes |
-| Execution phases | Displays reported phases before long arguments, then clears them on completion |
-| Edit diffs | Theme-colored additions, deletions, and context within the preview limit |
-| Repeated calls | Consecutive successful calls of the same type share one collapsed row |
-| Standalone tools | Selected tools keep their own presentation outside the tool tree |
-| Context compression | A distinct `compress` display with token savings, topic summaries, and fixed duration |
+| **Codex Natural Summaries** | Natural language action phrasing like `Read a file, ran commands` (or `读取了文件，执行了命令`) |
+| **Interactive Inspector** | Click any group header to expand the group; click any individual tool row to inspect its output |
+| **Bilingual i18n** | Full English and 简体中文 support across summaries, statuses, and the interactive configuration UI |
+| **Interactive Settings** | `/flow-ui-config` TUI menu for real-time adjustments (headers, line limits, language) |
+| **Configurable Actions** | Custom verb phrase mappings for any standard or user-defined tool via `toolActions` |
+| **Failure Previews** | Automatically surfaces errors and failure root causes in the collapsed view |
+| **Syntax Diffs** | Theme-colored diffs for file edits (`edit`) with clear addition/deletion markers |
+| **Subagent Cards** | Specialized card rendering for `acp_delegate` sub-agents with hyperlinked output logs |
+| **Stable Timing** | Freezes execution duration reliably; shows turn dividers with total elapsed time |
 
 The renderer also removes empty native thinking placeholders and uses compact,
 syntax-highlighted panels for fenced code blocks.
 
 ## Preview
 
-Consecutive successful reads collapse into one row. The default collapsed view
-uses at most three lines:
+### Codex Natural Mode (`headerStyle: "natural"`)
 
 ```text
-✓ tools done · 4 tools · 0.6s
-│  ✓ read · 4 files
-└  · thinking: Checking the call sites… · ≈1.2K tok · 1.4s
+▲ Read a file, ran 2 commands · 1.8s
+│  ✓ bash: npm run check · exit 0 (1.2s)
+│  ✓ edit: src/index.ts · +3/-1 (0.2s)
+└  · thinking: Verifying module types… · ≈840 tok · 0.4s
 ```
+
+In Chinese (`language: "zh"`):
+
+```text
+▲ 读取了文件，执行了 2 条命令 · 1.8s
+│  ✓ bash: npm run check · exit 0 (1.2s)
+│  ✓ edit: src/index.ts · +3/-1 (0.2s)
+└  · thinking: 正在核对模块类型… · ≈840 tok · 0.4s
+```
+
+### Compact Mode (`headerStyle: "compact"`)
+
+```text
+✓ tools done · 3 tools · 1.2s
+│  ✓ read · 2 files
+└  · thinking: Checking call sites… · ≈1.2K tok · 1.4s
+```
+
+### Failure Priority Preview
 
 A failure gets priority over ordinary successful output:
 
@@ -74,8 +79,10 @@ A failure gets priority over ordinary successful output:
 └  ✓ read · 2 files
 ```
 
-Expand with `Ctrl+O` to see calls in chronological order, result previews, and
-colored edit diffs:
+### Two-Level Clickable Inspection
+
+1. **Click the group title** (or press `Ctrl+O`): expands all tools in chronological order with result previews.
+2. **Click any specific tool row**: toggle that individual tool's expanded/collapsed details independently.
 
 ```text
 ✓ tools done · 2 tools · 0.3s
@@ -87,14 +94,11 @@ colored edit diffs:
     +13 const retries = 3;
 ```
 
-Examples are illustrative; colors follow your Pi theme and durations depend on
-observed execution events.
-
 ## Configuration
 
-Use `/compact-ui-config` in Pi to open the interactive settings menu. You can switch header styles and adjust display thresholds with arrow keys and Enter.
+Use `/flow-ui-config` (or `/compact-ui-config`) in Pi to open the interactive settings menu. You can switch header styles and adjust display thresholds with arrow keys and Enter.
 
-Configuration is persisted at `~/.pi/agent/compact-ui.json`:
+Configuration is persisted at `~/.pi/agent/flow-ui.json` (also auto-migrates from `compact-ui.json`):
 
 | Setting | Default | Purpose |
 |---|---:|---|
@@ -106,16 +110,16 @@ Configuration is persisted at `~/.pi/agent/compact-ui.json`:
 | `standaloneTools` | `["compress"]` | Tools excluded from ordinary grouping (render with their own native UI) |
 | `toolActions` | `{}` | Custom verb phrase mappings for the `"natural"` header style |
 
-### Interactive Configuration (`/compact-ui-config`)
+### Interactive Configuration (`/flow-ui-config`)
 
-Run `/compact-ui-config` directly inside Pi:
+Run `/flow-ui-config` directly inside Pi:
 
 - **Language / 语言**: Press `Enter` to switch between `English` and `简体中文`.
 - **Header style**: Press `Enter` on Header style to open the picker, use `▲`/`▼` (or `j`/`k`) to switch between:
   - `compact`: e.g. `✓ tools done · 3 tools · 1.2s` (或 `✓ 工具调用完成 · 3 个工具 · 1.2s`)
   - `natural`: e.g. `✓ Read a file, ran commands · 1.2s` (或 `✓ 读取了文件，执行了命令 · 1.2s`)
 - **Line limits**: Press `Enter` to open a slider stepper, adjust with `◀`/`▶` (or `−`/`+`), then press `Enter` to save.
-- Settings are saved automatically to `~/.pi/agent/compact-ui.json` and take effect immediately.
+- Settings are saved automatically to `~/.pi/agent/flow-ui.json` and take effect immediately.
 
 ### Default Configuration File
 
